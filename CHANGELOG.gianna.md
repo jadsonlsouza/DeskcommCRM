@@ -1,5 +1,9 @@
 # Versões do Gianna
 
+## [0.1.3]
+
+- A atualização do banco preserva a view que separa os compromissos Amigo da sincronização Google.
+
 ## [0.1.2]
 
 - Acesso ao painel Atualização do sistema no rodapé para administradores da instalação.

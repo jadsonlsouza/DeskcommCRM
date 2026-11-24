@@ -976,16 +976,28 @@ begin
 end;$$;
 
 -- View nova: não acrescentar coluna à view histórica, pois seu a.* é reaplicado antes deste apêndice.
-create or replace view public.calendar_service_google_candidates with (security_invoker=true) as
- select a.id,a.organization_id,
-  case when a.service_occurrence_id is null and not a.service_block then a.owner_user_id else coalesce(link.user_id,dest.user_id) end owner_user_id,
-  a.needs_google_push,a.google_event_id,a.google_conflict,a.google_next_attempt_at
- from public.calendar_appointments a
- left join public.calendar_connections link on link.organization_id=a.organization_id and link.id=a.google_connection_id
- left join public.calendar_connection_calendars k on k.organization_id=a.organization_id and k.id=a.service_destination_calendar_id
- left join public.calendar_connections dest on dest.organization_id=k.organization_id and dest.id=k.connection_id
- where ((a.service_occurrence_id is null and not a.service_block) or a.service_publication_mode<>'none')
-  and not exists(select 1 from public.contacts c where c.organization_id=a.organization_id and c.id=a.contact_id and c.is_anonymized);
+-- A migration 9216 estende a view com authority. Em uma reaplicação,
+-- preserve essa definição até que a própria 9216 volte a ser executada.
+do $calendar_google_candidates$
+begin
+ if not exists (
+  select 1 from pg_catalog.pg_attribute
+  where attrelid=to_regclass('public.calendar_service_google_candidates')
+    and attname='authority' and attnum>0 and not attisdropped
+ ) then
+  create or replace view public.calendar_service_google_candidates with (security_invoker=true) as
+   select a.id,a.organization_id,
+    case when a.service_occurrence_id is null and not a.service_block then a.owner_user_id else coalesce(link.user_id,dest.user_id) end owner_user_id,
+    a.needs_google_push,a.google_event_id,a.google_conflict,a.google_next_attempt_at
+   from public.calendar_appointments a
+   left join public.calendar_connections link on link.organization_id=a.organization_id and link.id=a.google_connection_id
+   left join public.calendar_connection_calendars k on k.organization_id=a.organization_id and k.id=a.service_destination_calendar_id
+   left join public.calendar_connections dest on dest.organization_id=k.organization_id and dest.id=k.connection_id
+   where ((a.service_occurrence_id is null and not a.service_block) or a.service_publication_mode<>'none')
+    and not exists(select 1 from public.contacts c where c.organization_id=a.organization_id and c.id=a.contact_id and c.is_anonymized);
+ end if;
+end;
+$calendar_google_candidates$;
 revoke all on public.calendar_service_google_candidates from public,anon,authenticated;
 grant select on public.calendar_service_google_candidates to service_role;
 revoke all on function public.fn_google_appointment(uuid,uuid,text,jsonb) from public,anon,authenticated;
