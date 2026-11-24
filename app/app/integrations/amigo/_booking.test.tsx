@@ -104,3 +104,38 @@ it("seleciona recursos reais e preserva hora civil, turno e opções de oferta",
   });
   expect(new Headers(call[1].headers).get("Idempotency-Key")).toBeTruthy();
 });
+
+it("marca a vaga escolhida na semana para o paciente vinculado à conversa", async () => {
+  const operations: { operation: string; input: Record<string, unknown>; contact_id?: string }[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body)) as (typeof operations)[number];
+    operations.push(body);
+    const responses: Record<string, unknown> = {
+      places: [{ id: 774, name: "Unidade" }],
+      events: [{ id: 26, name: "Consulta" }],
+      doctors_available: [{ id: 2437, name: "Médico" }],
+      doctor_dates: body.input.date ? [{
+        id: "vaga", user_id: 2437, place_id: 774, start_date: "2026-11-24T13:00:00Z",
+      }] : ["24/11/2026", "01/12/2026"],
+      attendance_create: { id: 99, start_date: "2026-11-24 10:00" },
+    };
+    return new Response(JSON.stringify({ data: { data: responses[body.operation] ?? [] } }));
+  }));
+  const onSaved = vi.fn();
+  render(<AmigoBooking initialConfig={config} initialDoctor="2437" initialPlace="774"
+    selectedPatient={{ id: 12, name: "Paciente escolhido" }} contactId="contato"
+    weekStart="2026-11-22" onSaved={onSaved} />);
+  await screen.findByRole("option", { name: "Consulta" });
+  fireEvent.change(screen.getByLabelText("Tipo de atendimento"), { target: { value: "26" } });
+  await screen.findByRole("option", { name: "Médico" });
+  fireEvent.click(screen.getByRole("button", { name: "Consultar disponibilidade" }));
+  fireEvent.click(await screen.findByRole("button", { name: "10:00" }));
+  expect(operations.filter((entry) => entry.operation === "doctor_dates" && entry.input.date)
+    .map((entry) => entry.input.date)).toEqual(["2026-11-24"]);
+  fireEvent.click(screen.getByRole("button", { name: "Agendar no Amigo" }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+  expect(operations.find((entry) => entry.operation === "attendance_create")).toMatchObject({
+    contact_id: "contato",
+    input: { patient_id: 12, event_id: 26, place_id: 774, user_id: 2437, start_date: "2026-11-24 10:00" },
+  });
+});

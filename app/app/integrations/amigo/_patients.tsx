@@ -395,7 +395,7 @@ const patientFields = [
   ["address_state", "Estado", "text"],
   ["address_country", "País", "text"],
 ] as const;
-function PatientForm({
+export function PatientForm({
   patient,
   contactId,
   onSaved,

@@ -10,13 +10,15 @@ export function PatientPicker({
   onSelect,
   disabled = false,
   contactId,
+  initialQuery = "",
 }: {
   selected: Patient | null;
   onSelect: (patient: Patient | null) => void;
   disabled?: boolean;
   contactId?: string;
+  initialQuery?: string;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [kind, setKind] = useState("contact_cellphone");
   const [results, setResults] = useState<Patient[] | null>(null);
   const [error, setError] = useState("");

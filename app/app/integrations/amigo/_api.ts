@@ -46,12 +46,12 @@ export async function amigoRequest<T>(
   key?: string,
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
+  const org = orgDaAba();
+  if (org?.orgId) headers[HEADER_ORG_DA_ABA] = org.orgId;
   if (pinnedConnection) headers["X-Amigo-Connection"] = pinnedConnection;
   if (method !== "GET") {
     headers["Content-Type"] = "application/json";
     headers["Idempotency-Key"] = key ?? randomId();
-    const org = orgDaAba();
-    if (org?.orgId) headers[HEADER_ORG_DA_ABA] = org.orgId;
   }
   const res = await fetch(`${BASE}${path}`, {
     method,

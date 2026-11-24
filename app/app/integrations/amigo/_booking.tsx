@@ -7,24 +7,34 @@ import { useAmigoMutation, useLoad } from "./_hooks";
 import { PatientPicker } from "./_patient-picker";
 import { Field, MutationNotice, Notice, Panel, Pick, options, civilTime, shifts } from "./_ui";
 import type { AmigoSafeConfig, CalendarDay, DoctorSlot, Named, Patient } from "./_types";
+import { somarDiasDaSemana } from "@/lib/amigo/inbox-week";
 
 export function AmigoBooking({
   initialConfig: config,
   onSaved,
   contactId,
   disabled = false,
+  selectedPatient,
+  initialPlace,
+  initialDoctor,
+  weekStart,
 }: {
   initialConfig: AmigoSafeConfig;
   onSaved: () => void;
   contactId?: string;
   disabled?: boolean;
+  selectedPatient?: Patient | null;
+  initialPlace?: string;
+  initialDoctor?: string;
+  weekStart?: string;
 }) {
-  const [patient, setPatient] = useState<Patient | null>(null);
-  const [place, setPlace] = useState(String(config.default_place_id ?? ""));
+  const [pickedPatient, setPatient] = useState<Patient | null>(null);
+  const patient = selectedPatient === undefined ? pickedPatient : selectedPatient;
+  const [place, setPlace] = useState(initialPlace || String(config.default_place_id ?? ""));
   const [event, setEvent] = useState("");
   const [insurance, setInsurance] = useState("");
   const [product, setProduct] = useState("");
-  const [doctor, setDoctor] = useState("");
+  const [doctor, setDoctor] = useState(initialDoctor ?? "");
   const [specialty, setSpecialty] = useState("");
   const [born, setBorn] = useState("");
   const [gender, setGender] = useState("");
@@ -108,14 +118,14 @@ export function AmigoBooking({
     ],
   );
   const dates = useLoad(datesLoader, searched);
-  const slotsLoader = useCallback(
-    () =>
+  const slotsForDay = useCallback(
+    (date: string) =>
       read<(string | DoctorSlot)[]>("doctor_dates", {
         id: Number(doctor),
         event_id: Number(event),
         place_id: Number(place),
         patient_id: patient?.id,
-        date: day,
+        date,
         ...(insurance ? { insurance_id: Number(insurance) } : {}),
         ...(product ? { insurance_product_id: Number(product) } : {}),
         ...(config.allow_same_day === undefined ? {} : { allow_same_day: config.allow_same_day }),
@@ -128,7 +138,6 @@ export function AmigoBooking({
       event,
       place,
       patient?.id,
-      day,
       insurance,
       product,
       config.allow_same_day,
@@ -137,7 +146,8 @@ export function AmigoBooking({
       born,
     ],
   );
-  const slots = useLoad(slotsLoader, searched && !!day);
+  const slotsLoader = useCallback(() => slotsForDay(day), [slotsForDay, day]);
+  const slots = useLoad(slotsLoader, !weekStart && searched && !!day);
   const calendarLoader = useCallback(
     () =>
       read<CalendarDay[]>("calendar", {
@@ -149,7 +159,7 @@ export function AmigoBooking({
       }),
     [place, event, patient?.id, insurance, product],
   );
-  const calendar = useLoad(calendarLoader, searched);
+  const calendar = useLoad(calendarLoader, !weekStart && searched);
   const resetAvailability = () => {
     setSearched(false);
     setDay("");
@@ -170,15 +180,32 @@ export function AmigoBooking({
       value,
       label: `${value.slice(8)}/${value.slice(5, 7)}/${value.slice(0, 4)}`,
     }));
-  const availableSlots = (slots.data ?? []).filter(
+  const datesData = dates.data;
+  const timezone = config.timezone;
+  const loadWeekSlots = useCallback(async () => {
+    if (!weekStart || !datesData) return null;
+    const end = somarDiasDaSemana(weekStart, 6);
+    const availableDays = new Set(datesData.map((value) =>
+      typeof value === "string"
+        ? `${value.slice(6)}-${value.slice(3, 5)}-${value.slice(0, 2)}`
+        : civilTime(value.formatted_start_date ?? value.start_date, timezone).slice(0, 10),
+    ).filter((date) => date >= weekStart && date <= end));
+    const results = await Promise.all([...availableDays].map(slotsForDay));
+    return { week: weekStart, slots: results.flat() };
+  }, [datesData, slotsForDay, timezone, weekStart]);
+  const weekSlots = useLoad(loadWeekSlots, !!weekStart && searched && !!datesData && !dates.loading);
+  const matchingWeek = weekSlots.data?.week === weekStart ? weekSlots.data : null;
+  const availableSlots = ((weekStart ? matchingWeek?.slots : slots.data) ?? []).filter(
     (value): value is DoctorSlot =>
       typeof value !== "string" &&
       value.user_id === Number(doctor) &&
       (!value.place_id || value.place_id === Number(place)) &&
-      civilTime(value.formatted_start_date ?? value.start_date, config.timezone).startsWith(day),
+      (Boolean(weekStart) || civilTime(value.formatted_start_date ?? value.start_date, config.timezone).startsWith(day)),
   );
+  const selectedSlot = slot && (!weekStart ||
+    (!weekSlots.loading && availableSlots.some((candidate) => candidate.id === slot.id))) ? slot : null;
   const create = async () => {
-    if (!slot || !patient) return;
+    if (!selectedSlot || !patient) return;
     const result = await mutation.run(
       "attendance_create",
       {
@@ -187,7 +214,7 @@ export function AmigoBooking({
         event_id: Number(event),
         user_id: Number(doctor),
         ...insuranceInput,
-        start_date: civilTime(slot.formatted_start_date ?? slot.start_date, config.timezone),
+        start_date: civilTime(selectedSlot.formatted_start_date ?? selectedSlot.start_date, config.timezone),
         ...(config.allow_same_day === undefined ? {} : { allow_same_day: config.allow_same_day }),
       },
       contactId,
@@ -202,7 +229,7 @@ export function AmigoBooking({
       title="Nova consulta"
       description={`Escolha recursos da clínica e uma vaga retornada pelo Amigo. Horários em ${config.timezone}.`}
     >
-      <PatientPicker
+      {selectedPatient === undefined && <PatientPicker
         selected={patient}
         disabled={frozen}
         contactId={contactId}
@@ -210,7 +237,7 @@ export function AmigoBooking({
           setPatient(value);
           resetAvailability();
         }}
-      />
+      />}
       <fieldset disabled={frozen} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Pick
@@ -222,7 +249,7 @@ export function AmigoBooking({
               setEvent("");
               setInsurance("");
               setProduct("");
-              setDoctor("");
+              setDoctor(initialDoctor ?? "");
               setSpecialty("");
               resetAvailability();
             }}
@@ -234,7 +261,7 @@ export function AmigoBooking({
             options={options(events.data)}
             onChange={(e) => {
               setEvent(e.target.value);
-              setDoctor("");
+              setDoctor(initialDoctor ?? "");
               resetAvailability();
             }}
           />
@@ -316,7 +343,8 @@ export function AmigoBooking({
         <Button
           type="button"
           variant="outline"
-          disabled={!patient || !doctor || !event || !place || frozen}
+          disabled={!patient || !doctor || !event || !place || frozen || (Boolean(weekStart) &&
+            !doctors.data?.some((item) => item.id === Number(doctor)))}
           onClick={() => {
             setDay("");
             setSlot(null);
@@ -336,11 +364,12 @@ export function AmigoBooking({
             specialties.error ||
             dates.error ||
             slots.error ||
+            weekSlots.error ||
             calendar.error
           }
-          loading={dates.loading || slots.loading || calendar.loading}
+          loading={dates.loading || slots.loading || calendar.loading || weekSlots.loading}
         />
-        {searched && !dates.loading && (
+        {searched && !dates.loading && !weekStart && (
           <>
             <Pick
               label="Dia disponível"
@@ -358,7 +387,7 @@ export function AmigoBooking({
             )}
           </>
         )}
-        {day && !slots.loading && (
+        {day && !slots.loading && !weekStart && (
           <div className="flex flex-wrap gap-2" aria-label="Vagas disponíveis">
             {availableSlots.map((value) => (
               <Button
@@ -386,13 +415,41 @@ export function AmigoBooking({
             )}
           </div>
         )}
+        {weekStart && searched && !dates.loading && !weekSlots.loading && matchingWeek && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7" aria-label="Vagas da semana">
+            {Array.from({ length: 7 }, (_, index) => somarDiasDaSemana(weekStart, index)).map((date) => {
+              const choices = availableSlots.filter((value) =>
+                civilTime(value.formatted_start_date ?? value.start_date, timezone).startsWith(date));
+              return (
+                <div className="min-w-0 space-y-2 rounded-md border p-2" key={date}>
+                  <p className="text-xs font-medium">{date.slice(8)}/{date.slice(5, 7)}</p>
+                  {choices.length === 0 && <p className="text-xs text-muted-foreground">Sem vagas retornadas</p>}
+                  {choices.map((value) => (
+                    <Button
+                      key={value.id}
+                      type="button"
+                      variant={selectedSlot?.id === value.id ? "default" : "outline"}
+                      aria-pressed={selectedSlot?.id === value.id}
+                      className="h-auto min-h-9 w-full whitespace-normal px-2 py-1 text-xs"
+                      onClick={() => { setDay(date); setSlot(value); }}
+                    >
+                      {value.is_arrival_order
+                        ? `${shifts[value.shift ?? ""] ?? "Turno"} · chegada`
+                        : civilTime(value.formatted_start_date ?? value.start_date, timezone).slice(11)}
+                    </Button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
         {calendar.data && (
           <p className="text-xs text-muted-foreground">
             Calendário consultado para a unidade e o atendimento selecionados. A marcação usa a vaga
             validada do médico.
           </p>
         )}
-        {slot && (
+        {selectedSlot && (
           <div className="rounded-md border p-4 text-sm">
             <p className="font-medium">
               {patient?.name} · {events.data?.find((x) => x.id === Number(event))?.name} ·{" "}
@@ -402,15 +459,15 @@ export function AmigoBooking({
               {day.split("-").reverse().join("/")} ·{" "}
               {places.data?.find((x) => x.id === Number(place))?.name}
             </p>
-            {slot.is_arrival_order && (
+            {selectedSlot.is_arrival_order && (
               <p>
                 Atendimento por ordem de chegada, sem promessa de hora exata. Turno:{" "}
-                {shifts[slot.shift ?? ""] ?? "conferir com a clínica"}.
+                {shifts[selectedSlot.shift ?? ""] ?? "conferir com a clínica"}.
               </p>
             )}
           </div>
         )}
-        <Button disabled={!slot || frozen} onClick={() => void create()}>
+        <Button disabled={!selectedSlot || frozen} onClick={() => void create()}>
           Agendar no Amigo
         </Button>
       </fieldset>

@@ -1,5 +1,7 @@
 "use client";
 
+import { AmigoInboxAgenda } from "./AmigoInboxAgenda";
+
 import { CartaoDaCarteira } from "@/components/contacts/CartaoDaCarteira";
 import { RoteirosDoContato } from "@/components/contacts/RoteirosDoContato";
 import { AcervoSearch } from "./AcervoSearch";
@@ -1094,7 +1096,16 @@ export function CRMSidePanel({
             contactId={contactId}
           />
           <div className="flex flex-wrap gap-2 pt-1">
-            {contactId&&conversation?<Link className="underline" href={`/app/agenda?contato=${contactId}&conversa=${conversation.id}`}>{t("Marcar compromisso")}</Link>:null}
+            {contactId && conversation && !contact?.is_anonymized && (
+              podeVerCarteira && !readonly
+                ? <AmigoInboxAgenda
+                    key={`${conversation.id}:${contactId}`}
+                    conversationId={conversation.id}
+                    contactId={contactId}
+                    phone={contact?.phone_number}
+                  />
+                : <Link className="underline" href={`/app/agenda?contato=${contactId}&conversa=${conversation.id}`}>{t("Marcar compromisso")}</Link>
+            )}
             <Button
               size="sm"
               variant="outline"
