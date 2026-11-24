@@ -152,6 +152,8 @@ jobs:
             --notes-file "$RUNNER_TEMP/gianna-release.md"
 
   deploy:
+    # Por padrão, a release aguarda o administrador em Atualização do sistema.
+    if: vars.GIANNA_AUTO_DEPLOY == 'true'
     needs: [version, release]
     runs-on: ubuntu-latest
     permissions: {}

@@ -42,4 +42,8 @@ git push origin refs/tags/gianna-release-v0.1.0
 
 O workflow `gianna-release.yml` executa os testes do kit, constrói app, worker, scheduler e telefonia para AMD64 e ARM64 e confere os quatro pacotes por acesso anônimo. Só então cria a release `v0.1.0`. Na primeira publicação, se o GHCR criar pacotes privados, torne os quatro pacotes públicos nas configurações do GitHub Packages e execute novamente todos os jobs da publicação.
 
-O agente instalado na VPS identifica a release no `origin` e disponibiliza a atualização para um administrador. Valide em uma VPS de teste com uma versão anterior antes de aplicar em clínicas. Na validação, confira login, marca, versão do app, execução do worker, sincronização do Amigo e os dados existentes após a atualização.
+O agente instalado na VPS consulta as releases do fork a cada cinco minutos. O administrador pode abrir **Atualização do sistema** pelo rodapé e selecionar **Atualizar agora** quando houver uma versão disponível. Por padrão, a publicação deixa a instalação a cargo do administrador. O deploy direto pelo GitHub Actions é opcional e usa a variável de repositório `GIANNA_AUTO_DEPLOY=true`.
+
+Quando a instalação usa o arquivo `docker-compose.tunel.yml` para o proxy por IP, configure `GIANNA_COMPOSE_TUNNEL=1` no `.env` do Gianna para que o atualizador inclua o mesmo arquivo Compose.
+
+Valide em uma VPS de teste com uma versão anterior antes de aplicar em clínicas. Na validação, confira login, marca, versão do app, execução do worker, sincronização do Amigo e os dados existentes após a atualização.

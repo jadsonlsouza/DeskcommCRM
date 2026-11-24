@@ -8,9 +8,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Controle essencial da instalação: não é removível pela interface do vínculo.
- * Versão instalada no rodapé da sidebar. Vira um aviso clicável só para quem
- * é dono do servidor E tem versão nova — quem não pode atualizar não é
- * alertado sobre algo que não pode resolver.
+ * Mostra a versão instalada e oferece ao dono acesso ao painel de atualização.
  */
 export function VersionFooter({
   collapsed,
@@ -46,29 +44,31 @@ export function VersionFooter({
       )}
     </p>
   );
-  if (!alerta) return instalada;
+  if (!data.is_owner) return instalada;
 
   const novo = data.latest_version?.replace(/^v/i, "") ?? "";
+  const painel = t("Atualização do sistema");
   return (
     <div>
       {instalada}
       <Link
         href="/app/settings/atualizacao"
         onClick={onNavigate}
-        title={`${t("Nova versão")} ${novo} ${t("disponível")}`}
+        title={alerta ? `${t("Nova versão")} ${novo} ${t("disponível")}` : painel}
         className={cn(
           "flex items-center gap-2 rounded-md px-3 py-2 text-xs text-foreground hover:bg-accent/50",
           collapsed && "justify-center px-2",
         )}
       >
-        <span className="relative flex h-2 w-2 shrink-0">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-        </span>
+        {alerta && (
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+          </span>
+        )}
         {!collapsed && (
           <span className="truncate">
-            {t("Nova versão")}
-            {novo ? ` · ${novo}` : ""}
+            {alerta ? `${t("Nova versão")}${novo ? ` · ${novo}` : ""}` : painel}
           </span>
         )}
         {collapsed && <ArrowCircleUp size={16} aria-hidden />}

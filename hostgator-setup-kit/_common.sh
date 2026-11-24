@@ -252,6 +252,12 @@ unset _deskcomm_chamador
 #             (install-single-server.sh recusa): lá o Caddy publica também as
 #             APIs do Supabase.
 #
+# Overlay de proxy desta instalação Gianna, aplicado depois dos overrides de rede.
+overlay_do_tunel_gianna() {
+  [ "${GIANNA_COMPOSE_TUNNEL:-0}" = 1 ] || return 1
+  [ -f docker-compose.tunel.yml ] || die "Falta docker-compose.tunel.yml para o proxy da instalação."
+}
+
 # Todo `docker compose` do kit passa por aqui: com proxy externo, um comando sem
 # o override subiria o Caddy e ele iria bater de frente com o proxy da hospedagem.
 dc() {
@@ -265,6 +271,7 @@ dc() {
   # Rede do Supabase self-hosted no MESMO host: sem este overlay o compose recria
   # app/worker/scheduler só nas redes do CRM e `supabase-db` deixa de resolver.
   if rede_do_supabase_ok && [ -f docker-compose.supabase-rede.yml ]; then ca+=(-f docker-compose.supabase-rede.yml); fi
+  if overlay_do_tunel_gianna; then ca+=(-f docker-compose.tunel.yml); fi
   if [ "${SINGLE_SERVER:-0}" = "1" ]; then
     # #2099: o single-server também respeita o proxy da hospedagem. Os dois
     # ramos eram `if SINGLE_SERVER` → return ANTES do seletor, então o
@@ -301,6 +308,7 @@ dc_files() {
   if rede_do_supabase_ok && [ -f docker-compose.supabase-rede.yml ]; then
     sufixo="${sufixo} -f docker-compose.supabase-rede.yml"
   fi
+  if overlay_do_tunel_gianna; then sufixo="${sufixo} -f docker-compose.tunel.yml"; fi
   if [ "${SINGLE_SERVER:-0}" = "1" ]; then
     # #2099: mesma junção de dc() — a lista de -f tem de bater com o que dc()
     # realmente roda, ou a mensagem ensinaria o dono a omitir o overlay do

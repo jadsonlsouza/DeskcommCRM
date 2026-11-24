@@ -1,5 +1,11 @@
 # Versões do Gianna
 
+## [0.1.2]
+
+- Acesso ao painel Atualização do sistema no rodapé para administradores da instalação.
+- As versões publicadas ficam disponíveis para instalação pelo painel. A publicação pode ser configurada para atualizar a VPS automaticamente.
+- Preservação do arquivo Compose do proxy IP durante atualizações pelo painel.
+
 ## [0.1.1]
 
 - Agenda semanal do Amigo no Inbox, com ocupação do médico e consulta de vagas.
